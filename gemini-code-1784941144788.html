@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>バスケ動画 2画面比較アプリ (Web版)</title>
+    <style>
+        body { margin: 0; background: #111; color: #fff; font-family: sans-serif; overflow: hidden; }
+        /* 左右2分割のコンテナ */
+        .video-container { display: flex; width: 100vw; height: calc(100vh - 80px); position: relative; }
+        .video-box { flex: 1; position: relative; background: #000; border: 1px solid #333; }
+        video { width: 100%; height: 100%; object-fit: contain; }
+        /* 動画の上に重ねる透明キャンバス */
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; }
+        /* 画面下部のコントロールエリア */
+        .controls { height: 80px; background: #222; display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 20px; }
+        button { background: #007AFF; color: #fff; border: none; padding: 12px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        button:active { background: #0056b3; }
+        .btn-step { background: #444; }
+        .btn-clear { background: #FF3B30; }
+    </style>
+</head>
+<body>
+
+    <!-- 左右の動画と描画レイヤー -->
+    <div class="video-container">
+        <!-- 左：お手本動画 -->
+        <div class="video-box">
+            <video id="videoA" src="sampleA.mp4" playsinline muted></video>
+            <canvas id="canvasA"></canvas>
+        </div>
+        <!-- 右：練習動画 -->
+        <div class="video-box">
+            <video id="videoB" src="sampleB.mp4" playsinline muted></video>
+            <canvas id="canvasB"></canvas>
+        </div>
+    </div>
+
+    <!-- コントロールバー -->
+    <div class="controls">
+        <button class="btn-step" onclick="stepFrame(-1)">◀◀ 1コマ戻る</button>
+        <button id="playBtn" onclick="togglePlay()">再生 / 停止</button>
+        <button class="btn-step" onclick="stepFrame(1)">1コマ進む ▶▶</button>
+        <button class="btn-clear" onclick="clearCanvas()">ラインを消去</button>
+    </div>
+
+    <script>
+        const videoA = document.getElementById('videoA');
+        const videoB = document.getElementById('videoB');
+        const canvasA = document.getElementById('canvasA');
+        const canvasB = document.getElementById('canvasB');
+        const fps = 30; // コマ送り用（1秒あたりのフレーム数）
+
+        // --- 1. 同期再生・停止コントロール ---
+        function togglePlay() {
+            if (videoA.paused) {
+                videoA.play();
+                videoB.play();
+            } else {
+                videoA.pause();
+                videoB.pause();
+            }
+        }
+
+        // --- 2. 1コマ送り / コマ戻り ---
+        function stepFrame(dir) {
+            videoA.pause();
+            videoB.pause();
+            const stepTime = (1 / fps) * dir;
+            videoA.currentTime = Math.max(0, videoA.currentTime + stepTime);
+            videoB.currentTime = Math.max(0, videoB.currentTime + stepTime);
+        }
+
+        // --- 3. Apple Pencil描画対応 (Pointer Events API) ---
+        function setupCanvas(canvas) {
+            const ctx = canvas.getContext('2d');
+            let isDrawing = false;
+
+            // キャンバスサイズを画面サイズに合わせる
+            function resize() {
+                canvas.width = canvas.parentElement.clientWidth;
+                canvas.height = canvas.parentElement.clientHeight;
+                ctx.strokeStyle = '#FFD700'; // 黄色マーカー
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
+            }
+            window.addEventListener('resize', resize);
+            resize();
+
+            // 描画イベント（Apple Pencilのみ反応させる魔法）
+            canvas.addEventListener('pointerdown', (e) => {
+                // ペン ("pen") 以外のタッチ（指・マウス等）は無視して動画操作へ
+                if (e.pointerType !== 'pen' && e.pointerType !== 'mouse') return;
+                isDrawing = true;
+                ctx.beginPath();
+                ctx.moveTo(e.offsetX, e.offsetY);
+            });
+
+            canvas.addEventListener('pointermove', (e) => {
+                if (!isDrawing) return;
+                ctx.lineTo(e.offsetX, e.offsetY);
+                ctx.stroke();
+            });
+
+            window.addEventListener('pointerup', () => isDrawing = false);
+        }
+
+        setupCanvas(canvasA);
+        setupCanvas(canvasB);
+
+        function clearCanvas() {
+            canvasA.getContext('2d').clearRect(0, 0, canvasA.width, canvasA.height);
+            canvasB.getContext('2d').clearRect(0, 0, canvasB.width, canvasB.height);
+        }
+    </script>
+</body>
+</html>
